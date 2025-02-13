@@ -1,0 +1,9 @@
+[
+  {
+    "Input": "4ae7c3b6ac0beff671efa8cf57386151c06e58ca53a78d83f36107316cec125fb83776a784c94713c4e62dbb9a147d79c46d5e9123f158ee1edbede3d04a1023e3e95e8eafe758af255e9363bcd94bd8c604de96cafc9112e2b595fed250dfe2f3fbd8853bfa9e3b0106849fcf10cbd0d2653b54ff4c3c2b753ee675dc359d6ec891a19c7b409d136c8a2e7828aea2166e9a21e7b184007e8dbd412bbf993723",
+    "ExpectedError": "invalid public key: point not on curve",
+    "Gas": 3450,
+    "Name": "InvalidP256Signature",
+    "NoBenchmark": false
+  }
+]

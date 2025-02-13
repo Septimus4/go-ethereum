@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
@@ -137,6 +139,29 @@ var PrecompiledContractsPrague = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x11}): &bls12381MapG2{},
 }
 
+// PrecompiledContractsSeptimus contains the set of pre-compiled Ethereum
+// contracts used in the Septimus release.
+var PrecompiledContractsSeptimus = PrecompiledContracts{
+	common.BytesToAddress([]byte{0x01}):       &ecrecover{},
+	common.BytesToAddress([]byte{0x02}):       &sha256hash{},
+	common.BytesToAddress([]byte{0x03}):       &ripemd160hash{},
+	common.BytesToAddress([]byte{0x04}):       &dataCopy{},
+	common.BytesToAddress([]byte{0x05}):       &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{0x06}):       &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{0x07}):       &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{0x08}):       &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{0x09}):       &blake2F{},
+	common.BytesToAddress([]byte{0x0a}):       &kzgPointEvaluation{},
+	common.BytesToAddress([]byte{0x0b}):       &bls12381G1Add{},
+	common.BytesToAddress([]byte{0x0c}):       &bls12381G1MultiExp{},
+	common.BytesToAddress([]byte{0x0d}):       &bls12381G2Add{},
+	common.BytesToAddress([]byte{0x0e}):       &bls12381G2MultiExp{},
+	common.BytesToAddress([]byte{0x0f}):       &bls12381Pairing{},
+	common.BytesToAddress([]byte{0x10}):       &bls12381MapG1{},
+	common.BytesToAddress([]byte{0x11}):       &bls12381MapG2{},
+	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{},
+}
+
 var PrecompiledContractsBLS = PrecompiledContractsPrague
 
 var PrecompiledContractsVerkle = PrecompiledContractsPrague
@@ -148,6 +173,7 @@ var (
 	PrecompiledAddressesIstanbul  []common.Address
 	PrecompiledAddressesByzantium []common.Address
 	PrecompiledAddressesHomestead []common.Address
+	PrecompiledAddressesSeptimus  []common.Address
 )
 
 func init() {
@@ -169,12 +195,17 @@ func init() {
 	for k := range PrecompiledContractsPrague {
 		PrecompiledAddressesPrague = append(PrecompiledAddressesPrague, k)
 	}
+	for k := range PrecompiledContractsSeptimus {
+		PrecompiledAddressesSeptimus = append(PrecompiledAddressesSeptimus, k)
+	}
 }
 
 func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 	switch {
 	case rules.IsVerkle:
 		return PrecompiledContractsVerkle
+	case rules.IsSeptimus:
+		return PrecompiledContractsSeptimus
 	case rules.IsPrague:
 		return PrecompiledContractsPrague
 	case rules.IsCancun:
@@ -198,6 +229,8 @@ func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 // ActivePrecompiles returns the precompile addresses enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsSeptimus:
+		return PrecompiledAddressesSeptimus
 	case rules.IsPrague:
 		return PrecompiledAddressesPrague
 	case rules.IsCancun:
@@ -1181,4 +1214,53 @@ func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 	h[0] = blobCommitmentVersionKZG
 
 	return h
+}
+
+// p256Verify implements EIP-7212 precompile.
+type p256Verify struct{}
+
+var (
+	errP256VerifyInvalidInputLength    = errors.New("invalid input length")
+	errP256VerifyInvalidPubKey         = errors.New("invalid public key: point not on curve")
+	errP256VerifyInvalidSignatureRange = errors.New("invalid signature parameters: r or s out of range")
+)
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+func (c *p256Verify) RequiredGas(input []byte) uint64 {
+	return params.P256VerifyGas
+}
+
+// Run processes the 160-byte input and returns a 32-byte output: 1 if valid, 0 if invalid.
+func (c *p256Verify) Run(input []byte) ([]byte, error) {
+	if len(input) != 160 {
+		return nil, errP256VerifyInvalidInputLength
+	}
+
+	msgHash := input[:32]
+	r := new(big.Int).SetBytes(input[32:64])
+	s := new(big.Int).SetBytes(input[64:96])
+	x := new(big.Int).SetBytes(input[96:128])
+	y := new(big.Int).SetBytes(input[128:160])
+
+	curve := elliptic.P256()
+	curveParams := curve.Params()
+
+	// Check that the public key (x, y) is on the curve
+	if !curve.IsOnCurve(x, y) {
+		return nil, errP256VerifyInvalidPubKey
+	}
+
+	// Ensure signature parameters r and s are in the valid range: [1, N-1]
+	one := big.NewInt(1)
+	if r.Cmp(one) < 0 || r.Cmp(curveParams.N) >= 0 || s.Cmp(one) < 0 || s.Cmp(curveParams.N) >= 0 {
+		return nil, errP256VerifyInvalidSignatureRange
+	}
+
+	// Reconstruct the public key and perform signature verification
+	pubKey := ecdsa.PublicKey{Curve: curve, X: x, Y: y}
+	valid := ecdsa.Verify(&pubKey, msgHash, r, s)
+	if !valid {
+		return []byte{0}, nil
+	}
+	return []byte{1}, nil
 }

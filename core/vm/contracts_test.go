@@ -65,6 +65,8 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{0x0f, 0x0e}): &bls12381Pairing{},
 	common.BytesToAddress([]byte{0x0f, 0x0f}): &bls12381MapG1{},
 	common.BytesToAddress([]byte{0x0f, 0x10}): &bls12381MapG2{},
+
+	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{},
 }
 
 // EIP-152 test vectors
@@ -392,4 +394,18 @@ func BenchmarkPrecompiledBLS12381G2MultiExpWorstCase(b *testing.B) {
 		NoBenchmark: false,
 	}
 	benchmarkPrecompiled("f0f", testcase, b)
+}
+
+func TestPrecompiledP256Verify(t *testing.T)     { testJson("p256Verify", "100", t) }
+func TestPrecompiledP256VerifyFail(t *testing.T) { testJsonFail("p256Verify", "100", t) }
+
+func BenchmarkPrecompiledP256Verify(b *testing.B) {
+	task := precompiledTest{
+		Input:       "4ae7c3b6ac0beff671efa8cf57386151c06e58ca53a78d83f36107316cec125fe4e6a3e3583fca80b3e150d857c726ac831cc95a4f4284ef080fd72825314dfbb43e42fb4b1ff78e4a2ce92084f89ac9138e78fa0dc4b63145b8712ec910df8918aa7841ac25039095ecb73aab0e30b334ef0b23b86712acef8b71ed2f115d339320a6f0d7c33d249446bd74d4ec01fd01810a3817295c12c81e333269eb4b25",
+		Expected:    "01",
+		Gas:         3450,
+		Name:        "ValidP256Signature",
+		NoBenchmark: false,
+	}
+	benchmarkPrecompiled("100", task, b)
 }

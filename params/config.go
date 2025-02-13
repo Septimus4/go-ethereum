@@ -367,6 +367,7 @@ type ChainConfig struct {
 	PragueTime   *uint64 `json:"pragueTime,omitempty"`   // Prague switch time (nil = no fork, 0 = already on prague)
 	OsakaTime    *uint64 `json:"osakaTime,omitempty"`    // Osaka switch time (nil = no fork, 0 = already on osaka)
 	VerkleTime   *uint64 `json:"verkleTime,omitempty"`   // Verkle switch time (nil = no fork, 0 = already on verkle)
+	SeptimusTime *uint64 `json:"septimusTime,omitempty"` // Septimus switch time (nil = no fork, 0 = already on septimus)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -604,6 +605,11 @@ func (c *ChainConfig) IsOsaka(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.OsakaTime, time)
 }
 
+// IsSeptimus returns whether time is either equal to the Septimus fork time or greater.
+func (c *ChainConfig) IsSeptimus(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.SeptimusTime, time)
+}
+
 // IsVerkle returns whether time is either equal to the Verkle fork time or greater.
 func (c *ChainConfig) IsVerkle(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.VerkleTime, time)
@@ -683,6 +689,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "cancunTime", timestamp: c.CancunTime, optional: true},
 		{name: "pragueTime", timestamp: c.PragueTime, optional: true},
 		{name: "osakaTime", timestamp: c.OsakaTime, optional: true},
+		{name: "septimusTime", timestamp: c.SeptimusTime, optional: true},
 		{name: "verkleTime", timestamp: c.VerkleTime, optional: true},
 	} {
 		if lastFork.name != "" {
@@ -828,6 +835,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	}
 	if isForkTimestampIncompatible(c.OsakaTime, newcfg.OsakaTime, headTimestamp) {
 		return newTimestampCompatError("Osaka fork timestamp", c.OsakaTime, newcfg.OsakaTime)
+	}
+	if isForkTimestampIncompatible(c.SeptimusTime, newcfg.SeptimusTime, headTimestamp) {
+		return newTimestampCompatError("Septimus fork timestamp", c.SeptimusTime, newcfg.SeptimusTime)
 	}
 	if isForkTimestampIncompatible(c.VerkleTime, newcfg.VerkleTime, headTimestamp) {
 		return newTimestampCompatError("Verkle fork timestamp", c.VerkleTime, newcfg.VerkleTime)
@@ -1003,7 +1013,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsEIP2929, IsEIP4762                                    bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
-	IsBerlin, IsLondon                                      bool
+	IsBerlin, IsLondon, IsSeptimus                          bool
 	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
 	IsVerkle                                                bool
 }
@@ -1035,6 +1045,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsCancun:         isMerge && c.IsCancun(num, timestamp),
 		IsPrague:         isMerge && c.IsPrague(num, timestamp),
 		IsOsaka:          isMerge && c.IsOsaka(num, timestamp),
+		IsSeptimus:       isMerge && c.IsSeptimus(num, timestamp),
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,
 	}
