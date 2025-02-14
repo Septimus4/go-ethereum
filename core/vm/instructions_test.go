@@ -18,6 +18,7 @@ package vm
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -277,6 +278,71 @@ func TestJsonTestcases(t *testing.T) {
 		var testcases []TwoOperandTestcase
 		json.Unmarshal(data, &testcases)
 		testTwoOperandOp(t, testcases, twoOpMethods[name], name)
+	}
+}
+
+// TestOpPush0 tests that opPush0 correctly pushes a zero value onto the stack.
+func TestOpPush0(t *testing.T) {
+	// Create a dummy memory and stack.
+	mem := NewMemory()
+	stack := newstack()
+	pc := uint64(0)
+
+	env := NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+	interpreter := NewEVMInterpreter(env, env.Config)
+	// For PUSH0, the contract code is irrelevant.
+	contract := &Contract{Code: []byte{}}
+	scope := &ScopeContext{
+		Memory:   mem,
+		Stack:    stack,
+		Contract: contract,
+	}
+
+	_, err := opPush0(&pc, interpreter, scope)
+	if err != nil {
+		t.Fatalf("opPush0 returned error: %v", err)
+	}
+
+	if stack.len() != 1 {
+		t.Fatalf("expected stack length 1, got %d", stack.len())
+	}
+
+	top := stack.pop()
+	if !top.IsZero() {
+		t.Errorf("expected top of stack to be zero, got %s", hex.EncodeToString(top.Bytes()))
+	}
+
+	if pc != 0 {
+		t.Errorf("expected pc to remain 0, got %d", pc)
+	}
+}
+
+// BenchmarkOpPush0 benchmarks the performance of opPush0.
+func BenchmarkOpPush0(b *testing.B) {
+	// Create a dummy memory and initial environment.
+	mem := NewMemory()
+	pc := uint64(0)
+	env := NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+	interpreter := NewEVMInterpreter(env, env.Config)
+	contract := &Contract{Code: []byte{}}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		stack := newstack()
+		pc = 0
+		scope := &ScopeContext{
+			Memory:   mem,
+			Stack:    stack,
+			Contract: contract,
+		}
+		_, err := opPush0(&pc, interpreter, scope)
+		if err != nil {
+			b.Fatalf("opPush0 error: %v", err)
+		}
+		if stack.len() != 1 {
+			b.Fatalf("expected stack length 1, got %d", stack.len())
+		}
+		stack.pop()
 	}
 }
 
