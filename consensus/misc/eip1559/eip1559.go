@@ -34,7 +34,7 @@ func VerifyEIP1559Header(config *params.ChainConfig, parent, header *types.Heade
 	// Verify that the gas limit remains within allowed bounds
 	parentGasLimit := parent.GasLimit
 	if !config.IsLondon(parent.Number) {
-		parentGasLimit = parent.GasLimit * config.ElasticityMultiplier()
+		parentGasLimit = parent.GasLimit * 2
 	}
 	if err := misc.VerifyGaslimit(parentGasLimit, header.GasLimit); err != nil {
 		return err
@@ -59,7 +59,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		return new(big.Int).SetUint64(params.InitialBaseFee)
 	}
 
-	parentGasTarget := parent.GasLimit / config.ElasticityMultiplier()
+	parentGasTarget := parent.GasLimit * config.ElasticityMultiplier() / config.ElasticityDivisor()
 	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
 	if parent.GasUsed == parentGasTarget {
 		return new(big.Int).Set(parent.BaseFee)
@@ -72,9 +72,10 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 
 	if parent.GasUsed > parentGasTarget {
 		// If the parent block used more gas than its target, the baseFee should increase.
-		// max(1, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
+		// Formula: delta = parent.BaseFee * (gasUsed - gasTarget) * 3 / (gasTarget * 8)
 		num.SetUint64(parent.GasUsed - parentGasTarget)
 		num.Mul(num, parent.BaseFee)
+		num.Mul(num, big.NewInt(3))
 		num.Div(num, denom.SetUint64(parentGasTarget))
 		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator()))
 		if num.Cmp(common.Big1) < 0 {
