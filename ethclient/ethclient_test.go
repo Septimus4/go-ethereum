@@ -419,7 +419,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 		},
 		BaseFee: []*big.Int{
 			big.NewInt(765625000),
-			big.NewInt(671627818),
+			big.NewInt(671059170),
 		},
 		GasUsedRatio: []float64{0.008912678667376286},
 	}

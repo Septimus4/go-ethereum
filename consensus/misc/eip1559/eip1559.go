@@ -59,40 +59,44 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		return new(big.Int).SetUint64(params.InitialBaseFee)
 	}
 
-	parentGasTarget := parent.GasLimit / config.ElasticityMultiplier()
+	parentGasTarget := config.GasTarget(parent.GasLimit)
 	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
 	if parent.GasUsed == parentGasTarget {
 		return new(big.Int).Set(parent.BaseFee)
 	}
 
-	var (
-		num   = new(big.Int)
-		denom = new(big.Int)
+	// Compute the full denominator as (parentGasTarget * BaseFeeChangeDenominator)
+	denom := new(big.Int).Mul(
+		new(big.Int).SetUint64(parentGasTarget),
+		new(big.Int).SetUint64(config.BaseFeeChangeDenominator()),
 	)
 
+	delta := new(big.Int)
+	// Increase: use a slope of 3/8.
 	if parent.GasUsed > parentGasTarget {
-		// If the parent block used more gas than its target, the baseFee should increase.
-		// max(1, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
-		num.SetUint64(parent.GasUsed - parentGasTarget)
-		num.Mul(num, parent.BaseFee)
-		num.Div(num, denom.SetUint64(parentGasTarget))
-		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator()))
-		if num.Cmp(common.Big1) < 0 {
-			return num.Add(parent.BaseFee, common.Big1)
+		diff := parent.GasUsed - parentGasTarget
+		// delta = parent.BaseFee * diff * 3 / (parentGasTarget * BaseFeeChangeDenominator)
+		delta.SetUint64(diff)
+		delta.Mul(delta, parent.BaseFee)
+		delta.Mul(delta, big.NewInt(3))
+		delta.Div(delta, denom)
+		// Enforce a minimum increase of 1.
+		if delta.Cmp(common.Big1) < 0 {
+			delta = common.Big1
 		}
-		return num.Add(parent.BaseFee, num)
-	} else {
-		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
-		// max(0, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
-		num.SetUint64(parentGasTarget - parent.GasUsed)
-		num.Mul(num, parent.BaseFee)
-		num.Div(num, denom.SetUint64(parentGasTarget))
-		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator()))
-
-		baseFee := num.Sub(parent.BaseFee, num)
-		if baseFee.Cmp(common.Big0) < 0 {
-			baseFee = common.Big0
-		}
-		return baseFee
+		return new(big.Int).Add(parent.BaseFee, delta)
 	}
+
+	// Decrease: use a slope of 1/8.
+	// delta = parent.BaseFee * (parentGasTarget - parent.GasUsed) / (parentGasTarget * BaseFeeChangeDenominator)
+	diff := parentGasTarget - parent.GasUsed
+	delta.SetUint64(diff)
+	delta.Mul(delta, parent.BaseFee)
+	delta.Div(delta, denom)
+
+	baseFee := delta.Sub(parent.BaseFee, delta)
+	if baseFee.Cmp(common.Big0) < 0 {
+		baseFee = common.Big0
+	}
+	return baseFee
 }

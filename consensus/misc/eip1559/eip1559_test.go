@@ -26,7 +26,7 @@ import (
 )
 
 // copyConfig does a _shallow_ copy of a given config. Safe to set new values, but
-// do not use e.g. SetInt() on the numbers. For testing only
+// do not use e.g. SetInt() on the numbers. For testing only.
 func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 	return &params.ChainConfig{
 		ChainID:                 original.ChainID,
@@ -66,13 +66,13 @@ func TestBlockGasLimits(t *testing.T) {
 		gasLimit  uint64
 		ok        bool
 	}{
-		// Transitions from non-london to london
+		// Transitions from non-London to London (pre-London equilibrium remains at 50%)
 		{10000000, 4, 20000000, true},  // No change
 		{10000000, 4, 20019530, true},  // Upper limit
-		{10000000, 4, 20019531, false}, // Upper +1
+		{10000000, 4, 20019531, false}, // Upper limit +1
 		{10000000, 4, 19980470, true},  // Lower limit
 		{10000000, 4, 19980469, false}, // Lower limit -1
-		// London to London
+		// London to London (new equilibrium should be at 75%)
 		{20000000, 5, 20000000, true},
 		{20000000, 5, 20019530, true},  // Upper limit
 		{20000000, 5, 20019531, false}, // Upper limit +1
@@ -80,27 +80,37 @@ func TestBlockGasLimits(t *testing.T) {
 		{20000000, 5, 19980469, false}, // Lower limit -1
 		{40000000, 5, 40039061, true},  // Upper limit
 		{40000000, 5, 40039062, false}, // Upper limit +1
-		{40000000, 5, 39960939, true},  // lower limit
+		{40000000, 5, 39960939, true},  // Lower limit
 		{40000000, 5, 39960938, false}, // Lower limit -1
 	} {
+		var parentGasUsed, headerGasUsed uint64
+		// For London blocks (pNum >= 5) use 75% target; otherwise use 50%
+		if tc.pNum >= 5 {
+			parentGasUsed = tc.pGasLimit * 3 / 4
+			headerGasUsed = tc.gasLimit * 3 / 4
+		} else {
+			parentGasUsed = tc.pGasLimit / 2
+			headerGasUsed = tc.gasLimit / 2
+		}
+
 		parent := &types.Header{
-			GasUsed:  tc.pGasLimit / 2,
+			GasUsed:  parentGasUsed,
 			GasLimit: tc.pGasLimit,
 			BaseFee:  initial,
 			Number:   big.NewInt(tc.pNum),
 		}
 		header := &types.Header{
-			GasUsed:  tc.gasLimit / 2,
+			GasUsed:  headerGasUsed,
 			GasLimit: tc.gasLimit,
 			BaseFee:  initial,
 			Number:   big.NewInt(tc.pNum + 1),
 		}
 		err := VerifyEIP1559Header(config(), parent, header)
 		if tc.ok && err != nil {
-			t.Errorf("test %d: Expected valid header: %s", i, err)
+			t.Errorf("test %d: Expected valid header, but got error: %s", i, err)
 		}
 		if !tc.ok && err == nil {
-			t.Errorf("test %d: Expected invalid header", i)
+			t.Errorf("test %d: Expected invalid header, but verification passed", i)
 		}
 	}
 }
@@ -113,9 +123,9 @@ func TestCalcBaseFee(t *testing.T) {
 		parentGasUsed   uint64
 		expectedBaseFee int64
 	}{
-		{params.InitialBaseFee, 20000000, 10000000, params.InitialBaseFee}, // usage == target
-		{params.InitialBaseFee, 20000000, 9000000, 987500000},              // usage below target
-		{params.InitialBaseFee, 20000000, 11000000, 1012500000},            // usage above target
+		{params.InitialBaseFee, 20000000, 15000000, params.InitialBaseFee},
+		{params.InitialBaseFee, 20000000, 9000000, 950000000},
+		{params.InitialBaseFee, 20000000, 16000000, 1025000000},
 	}
 	for i, test := range tests {
 		parent := &types.Header{
@@ -125,7 +135,7 @@ func TestCalcBaseFee(t *testing.T) {
 			BaseFee:  big.NewInt(test.parentBaseFee),
 		}
 		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
-			t.Errorf("test %d: have %d  want %d, ", i, have, want)
+			t.Errorf("test %d: have %d  want %d", i, have, want)
 		}
 	}
 }

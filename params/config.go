@@ -840,9 +840,13 @@ func (c *ChainConfig) BaseFeeChangeDenominator() uint64 {
 	return DefaultBaseFeeChangeDenominator
 }
 
-// ElasticityMultiplier bounds the maximum gas limit an EIP-1559 block may have.
+// ElasticityMultiplier returns the multiplier (numerator) for the effective gas limit calculation.
 func (c *ChainConfig) ElasticityMultiplier() uint64 {
 	return DefaultElasticityMultiplier
+}
+
+func (c *ChainConfig) GasTarget(parentGasLimit uint64) uint64 {
+	return parentGasLimit * DefaultGasTargetNumerator / DefaultGasTargetDenominator
 }
 
 // LatestFork returns the latest time-based fork that would be active for the given time.
