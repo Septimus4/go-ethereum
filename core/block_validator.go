@@ -19,7 +19,6 @@ package core
 import (
 	"errors"
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -32,15 +31,17 @@ import (
 //
 // BlockValidator implements Validator.
 type BlockValidator struct {
-	config *params.ChainConfig // Chain configuration options
-	bc     *BlockChain         // Canonical block chain
+	config      *params.ChainConfig // Chain configuration options
+	bc          *BlockChain         // Canonical block chain
+	workerCount int
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
-func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain) *BlockValidator {
+func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, workers int) *BlockValidator {
 	validator := &BlockValidator{
-		config: config,
-		bc:     blockchain,
+		config:      config,
+		bc:          blockchain,
+		workerCount: workers,
 	}
 	return validator
 }
@@ -115,6 +116,38 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		return consensus.ErrPrunedAncestor
 	}
 	return nil
+}
+
+// ValidateBodies validates a batch of blocks concurrently using a worker pool.
+// Returns a slice of errors corresponding to each block.
+func (v *BlockValidator) ValidateBodies(blocks []*types.Block) []error {
+	type result struct {
+		idx int
+		err error
+	}
+	jobs := make(chan int, len(blocks))       // job = index into blocks
+	results := make(chan result, len(blocks)) // one slot per block
+
+	for w := 0; w < v.workerCount; w++ {
+		go func() {
+			for idx := range jobs {
+				err := v.ValidateBody(blocks[idx])
+				results <- result{idx: idx, err: err}
+			}
+		}()
+	}
+
+	for i := range blocks {
+		jobs <- i
+	}
+	close(jobs)
+
+	errs := make([]error, len(blocks))
+	for i := 0; i < len(blocks); i++ {
+		r := <-results
+		errs[r.idx] = r.err
+	}
+	return errs
 }
 
 // ValidateState validates the various changes that happen after a state transition,

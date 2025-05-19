@@ -17,44 +17,46 @@ import (
 // MarshalTOML marshals as TOML.
 func (c Config) MarshalTOML() (interface{}, error) {
 	type Config struct {
-		Genesis                 *core.Genesis `toml:",omitempty"`
-		NetworkId               uint64
-		SyncMode                SyncMode
-		HistoryMode             history.HistoryMode
-		EthDiscoveryURLs        []string
-		SnapDiscoveryURLs       []string
-		NoPruning               bool
-		NoPrefetch              bool
-		TxLookupLimit           uint64 `toml:",omitempty"`
-		TransactionHistory      uint64 `toml:",omitempty"`
-		LogHistory              uint64 `toml:",omitempty"`
-		LogNoHistory            bool   `toml:",omitempty"`
-		LogExportCheckpoints    string
-		StateHistory            uint64                 `toml:",omitempty"`
-		StateScheme             string                 `toml:",omitempty"`
-		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
-		SkipBcVersionCheck      bool                   `toml:"-"`
-		DatabaseHandles         int                    `toml:"-"`
-		DatabaseCache           int
-		DatabaseFreezer         string
-		TrieCleanCache          int
-		TrieDirtyCache          int
-		TrieTimeout             time.Duration
-		SnapshotCache           int
-		Preimages               bool
-		FilterLogCacheSize      int
-		Miner                   miner.Config
-		TxPool                  legacypool.Config
-		BlobPool                blobpool.Config
-		GPO                     gasprice.Config
-		EnablePreimageRecording bool
-		VMTrace                 string
-		VMTraceJsonConfig       string
-		RPCGasCap               uint64
-		RPCEVMTimeout           time.Duration
-		RPCTxFeeCap             float64
-		OverridePrague          *uint64 `toml:",omitempty"`
-		OverrideVerkle          *uint64 `toml:",omitempty"`
+		Genesis                    *core.Genesis `toml:",omitempty"`
+		NetworkId                  uint64
+		SyncMode                   SyncMode
+		HistoryMode                history.HistoryMode
+		EthDiscoveryURLs           []string
+		SnapDiscoveryURLs          []string
+		NoPruning                  bool
+		NoPrefetch                 bool
+		TxLookupLimit              uint64 `toml:",omitempty"`
+		TransactionHistory         uint64 `toml:",omitempty"`
+		LogHistory                 uint64 `toml:",omitempty"`
+		LogNoHistory               bool   `toml:",omitempty"`
+		LogExportCheckpoints       string
+		StateHistory               uint64                 `toml:",omitempty"`
+		StateScheme                string                 `toml:",omitempty"`
+		RequiredBlocks             map[uint64]common.Hash `toml:"-"`
+		SkipBcVersionCheck         bool                   `toml:"-"`
+		DatabaseHandles            int                    `toml:"-"`
+		DatabaseCache              int
+		DatabaseFreezer            string
+		TrieCleanCache             int
+		TrieDirtyCache             int
+		TrieTimeout                time.Duration
+		SnapshotCache              int
+		Preimages                  bool
+		FilterLogCacheSize         int
+		Miner                      miner.Config
+		TxPool                     legacypool.Config
+		BlobPool                   blobpool.Config
+		GPO                        gasprice.Config
+		EnablePreimageRecording    bool
+		VMTrace                    string
+		VMTraceJsonConfig          string
+		RPCGasCap                  uint64
+		RPCEVMTimeout              time.Duration
+		RPCTxFeeCap                float64
+		OverridePrague             *uint64 `toml:",omitempty"`
+		OverrideVerkle             *uint64 `toml:",omitempty"`
+		HeaderValidatorWorkerCount int     `toml:",omitempty"`
+		BlockValidatorWorkerCount  int     `toml:",omitempty"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -95,50 +97,54 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
 	enc.OverridePrague = c.OverridePrague
 	enc.OverrideVerkle = c.OverrideVerkle
+	enc.HeaderValidatorWorkerCount = c.HeaderValidatorWorkerCount
+	enc.BlockValidatorWorkerCount = c.BlockValidatorWorkerCount
 	return &enc, nil
 }
 
 // UnmarshalTOML unmarshals from TOML.
 func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	type Config struct {
-		Genesis                 *core.Genesis `toml:",omitempty"`
-		NetworkId               *uint64
-		SyncMode                *SyncMode
-		HistoryMode             *history.HistoryMode
-		EthDiscoveryURLs        []string
-		SnapDiscoveryURLs       []string
-		NoPruning               *bool
-		NoPrefetch              *bool
-		TxLookupLimit           *uint64 `toml:",omitempty"`
-		TransactionHistory      *uint64 `toml:",omitempty"`
-		LogHistory              *uint64 `toml:",omitempty"`
-		LogNoHistory            *bool   `toml:",omitempty"`
-		LogExportCheckpoints    *string
-		StateHistory            *uint64                `toml:",omitempty"`
-		StateScheme             *string                `toml:",omitempty"`
-		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
-		SkipBcVersionCheck      *bool                  `toml:"-"`
-		DatabaseHandles         *int                   `toml:"-"`
-		DatabaseCache           *int
-		DatabaseFreezer         *string
-		TrieCleanCache          *int
-		TrieDirtyCache          *int
-		TrieTimeout             *time.Duration
-		SnapshotCache           *int
-		Preimages               *bool
-		FilterLogCacheSize      *int
-		Miner                   *miner.Config
-		TxPool                  *legacypool.Config
-		BlobPool                *blobpool.Config
-		GPO                     *gasprice.Config
-		EnablePreimageRecording *bool
-		VMTrace                 *string
-		VMTraceJsonConfig       *string
-		RPCGasCap               *uint64
-		RPCEVMTimeout           *time.Duration
-		RPCTxFeeCap             *float64
-		OverridePrague          *uint64 `toml:",omitempty"`
-		OverrideVerkle          *uint64 `toml:",omitempty"`
+		Genesis                    *core.Genesis `toml:",omitempty"`
+		NetworkId                  *uint64
+		SyncMode                   *SyncMode
+		HistoryMode                *history.HistoryMode
+		EthDiscoveryURLs           []string
+		SnapDiscoveryURLs          []string
+		NoPruning                  *bool
+		NoPrefetch                 *bool
+		TxLookupLimit              *uint64 `toml:",omitempty"`
+		TransactionHistory         *uint64 `toml:",omitempty"`
+		LogHistory                 *uint64 `toml:",omitempty"`
+		LogNoHistory               *bool   `toml:",omitempty"`
+		LogExportCheckpoints       *string
+		StateHistory               *uint64                `toml:",omitempty"`
+		StateScheme                *string                `toml:",omitempty"`
+		RequiredBlocks             map[uint64]common.Hash `toml:"-"`
+		SkipBcVersionCheck         *bool                  `toml:"-"`
+		DatabaseHandles            *int                   `toml:"-"`
+		DatabaseCache              *int
+		DatabaseFreezer            *string
+		TrieCleanCache             *int
+		TrieDirtyCache             *int
+		TrieTimeout                *time.Duration
+		SnapshotCache              *int
+		Preimages                  *bool
+		FilterLogCacheSize         *int
+		Miner                      *miner.Config
+		TxPool                     *legacypool.Config
+		BlobPool                   *blobpool.Config
+		GPO                        *gasprice.Config
+		EnablePreimageRecording    *bool
+		VMTrace                    *string
+		VMTraceJsonConfig          *string
+		RPCGasCap                  *uint64
+		RPCEVMTimeout              *time.Duration
+		RPCTxFeeCap                *float64
+		OverridePrague             *uint64 `toml:",omitempty"`
+		OverrideVerkle             *uint64 `toml:",omitempty"`
+		HeaderValidatorWorkerCount *int    `toml:",omitempty"`
+		BlockValidatorWorkerCount  *int    `toml:",omitempty"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -257,6 +263,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.OverrideVerkle != nil {
 		c.OverrideVerkle = dec.OverrideVerkle
+	}
+	if dec.HeaderValidatorWorkerCount != nil {
+		c.HeaderValidatorWorkerCount = *dec.HeaderValidatorWorkerCount
+	}
+	if dec.BlockValidatorWorkerCount != nil {
+		c.BlockValidatorWorkerCount = *dec.BlockValidatorWorkerCount
 	}
 	return nil
 }

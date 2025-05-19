@@ -295,7 +295,9 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis,
+	overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config,
+	txLookupLimit *uint64, headerWorkers, blockWorkers int) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -345,7 +347,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.statedb = state.NewDatabase(bc.triedb, nil)
-	bc.validator = NewBlockValidator(chainConfig, bc)
+	bc.validator = NewBlockValidator(chainConfig, bc, blockWorkers)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
 
@@ -1666,6 +1668,30 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
+
+	// Parallel header verification
+	headers := make([]*types.Header, len(chain))
+	for i, block := range chain {
+		headers[i] = block.Header()
+	}
+	abort, results := bc.engine.VerifyHeaders(bc, headers)
+	defer close(abort)
+
+	headerErrs := make([]error, len(chain))
+	for i := range chain {
+		headerErrs[i] = <-results
+		if headerErrs[i] != nil {
+			return i, headerErrs[i]
+		}
+	}
+
+	// Parallel body validation
+	bodyErrs := bc.validator.(*BlockValidator).ValidateBodies(chain)
+	for i, err := range bodyErrs {
+		if err != nil {
+			return i, err
+		}
+	}
 
 	_, n, err := bc.insertChain(chain, true, false) // No witness collection for mass inserts (would get super large)
 	return n, err

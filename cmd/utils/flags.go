@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	godebug "runtime/debug"
 	"strconv"
 	"strings"
@@ -497,6 +498,18 @@ var (
 		Name:     "crypto.kzg",
 		Usage:    "KZG library implementation to use; gokzg (recommended) or ckzg",
 		Value:    "gokzg",
+		Category: flags.PerfCategory,
+	}
+	HeaderValidatorWorkerCountFlag = &cli.IntFlag{
+		Name:     "header.validator.workers",
+		Usage:    "Number of header validator worker threads",
+		Value:    ethconfig.Defaults.HeaderValidatorWorkerCount,
+		Category: flags.PerfCategory,
+	}
+	BlockValidatorWorkerCountFlag = &cli.IntFlag{
+		Name:     "block.validator.workers",
+		Usage:    "Number of block validator worker threads",
+		Value:    ethconfig.Defaults.BlockValidatorWorkerCount,
 		Category: flags.PerfCategory,
 	}
 
@@ -1838,6 +1851,13 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.VMTraceJsonConfig = ctx.String(VMTraceJsonConfigFlag.Name)
 		}
 	}
+
+	if ctx.IsSet(HeaderValidatorWorkerCountFlag.Name) {
+		cfg.HeaderValidatorWorkerCount = ctx.Int(HeaderValidatorWorkerCountFlag.Name)
+	}
+	if ctx.IsSet(BlockValidatorWorkerCountFlag.Name) {
+		cfg.BlockValidatorWorkerCount = ctx.Int(BlockValidatorWorkerCountFlag.Name)
+	}
 }
 
 // MakeBeaconLightConfig constructs a beacon light client config based on the
@@ -2154,7 +2174,21 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if err != nil {
 		Fatalf("%v", err)
 	}
-	engine, err := ethconfig.CreateConsensusEngine(config, chainDb)
+	headerWorkers := ethconfig.Defaults.HeaderValidatorWorkerCount
+	if ctx.IsSet(HeaderValidatorWorkerCountFlag.Name) {
+		headerWorkers = ctx.Int(HeaderValidatorWorkerCountFlag.Name)
+	}
+	if headerWorkers <= 0 {
+		headerWorkers = runtime.NumCPU()
+	}
+	blockWorkers := ethconfig.Defaults.BlockValidatorWorkerCount
+	if ctx.IsSet(BlockValidatorWorkerCountFlag.Name) {
+		blockWorkers = ctx.Int(BlockValidatorWorkerCountFlag.Name)
+	}
+	if blockWorkers <= 0 {
+		blockWorkers = runtime.NumCPU()
+	}
+	engine, err := ethconfig.CreateConsensusEngine(config, chainDb, headerWorkers)
 	if err != nil {
 		Fatalf("%v", err)
 	}
@@ -2210,7 +2244,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		}
 	}
 	// Disable transaction indexing/unindexing by default.
-	chain, err := core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil)
+	chain, err := core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil, headerWorkers, blockWorkers)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

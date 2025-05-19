@@ -19,6 +19,7 @@ package ethconfig
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -49,26 +50,28 @@ var FullNodeGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	HistoryMode:        history.KeepAll,
-	SyncMode:           SnapSync,
-	NetworkId:          0, // enable auto configuration of networkID == chainID
-	TxLookupLimit:      2350000,
-	TransactionHistory: 2350000,
-	LogHistory:         2350000,
-	StateHistory:       params.FullImmutabilityThreshold,
-	DatabaseCache:      512,
-	TrieCleanCache:     154,
-	TrieDirtyCache:     256,
-	TrieTimeout:        60 * time.Minute,
-	SnapshotCache:      102,
-	FilterLogCacheSize: 32,
-	Miner:              miner.DefaultConfig,
-	TxPool:             legacypool.DefaultConfig,
-	BlobPool:           blobpool.DefaultConfig,
-	RPCGasCap:          50000000,
-	RPCEVMTimeout:      5 * time.Second,
-	GPO:                FullNodeGPO,
-	RPCTxFeeCap:        1, // 1 ether
+	HistoryMode:                history.KeepAll,
+	SyncMode:                   SnapSync,
+	NetworkId:                  0, // enable auto configuration of networkID == chainID
+	TxLookupLimit:              2350000,
+	TransactionHistory:         2350000,
+	LogHistory:                 2350000,
+	StateHistory:               params.FullImmutabilityThreshold,
+	DatabaseCache:              512,
+	TrieCleanCache:             154,
+	TrieDirtyCache:             256,
+	TrieTimeout:                60 * time.Minute,
+	SnapshotCache:              102,
+	FilterLogCacheSize:         32,
+	Miner:                      miner.DefaultConfig,
+	TxPool:                     legacypool.DefaultConfig,
+	BlobPool:                   blobpool.DefaultConfig,
+	RPCGasCap:                  50000000,
+	RPCEVMTimeout:              5 * time.Second,
+	GPO:                        FullNodeGPO,
+	RPCTxFeeCap:                1, // 1 ether
+	HeaderValidatorWorkerCount: runtime.NumCPU(),
+	BlockValidatorWorkerCount:  runtime.NumCPU(),
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
@@ -162,19 +165,24 @@ type Config struct {
 
 	// OverrideVerkle (TODO: remove after the fork)
 	OverrideVerkle *uint64 `toml:",omitempty"`
+
+	// HeaderValidatorWorkerCount controls the number of workers for parallel block header validation.
+	HeaderValidatorWorkerCount int `toml:",omitempty"`
+	// BlockValidatorWorkerCount controls the number of workers for parallel block body validation.
+	BlockValidatorWorkerCount int `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.
 // Clique is allowed for now to live standalone, but ethash is forbidden and can
 // only exist on already merged networks.
-func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database) (consensus.Engine, error) {
+func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database, headerWorkers int) (consensus.Engine, error) {
 	if config.TerminalTotalDifficulty == nil {
 		log.Error("Geth only supports PoS networks. Please transition legacy networks using Geth v1.13.x.")
 		return nil, fmt.Errorf("'terminalTotalDifficulty' is not set in genesis block")
 	}
 	// Wrap previously supported consensus engines into their post-merge counterpart
 	if config.Clique != nil {
-		return beacon.New(clique.New(config.Clique, db)), nil
+		return beacon.New(clique.New(config.Clique, db), headerWorkers), nil
 	}
-	return beacon.New(ethash.NewFaker()), nil
+	return beacon.New(ethash.NewFaker(), headerWorkers), nil
 }

@@ -19,8 +19,6 @@ package beacon
 import (
 	"errors"
 	"fmt"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -33,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
+	"math/big"
 )
 
 // Proof-of-stake protocol constants.
@@ -61,15 +60,19 @@ var (
 // is only used for necessary consensus checks. The legacy consensus engine can be any
 // engine implements the consensus interface (except the beacon itself).
 type Beacon struct {
-	ethone consensus.Engine // Original consensus engine used in eth1, e.g. ethash or clique
+	ethone                 consensus.Engine // Original consensus engine used in eth1, e.g. ethash or clique
+	headerValidatorWorkers int
 }
 
 // New creates a consensus engine with the given embedded eth1 engine.
-func New(ethone consensus.Engine) *Beacon {
+func New(ethone consensus.Engine, workers int) *Beacon {
 	if _, ok := ethone.(*Beacon); ok {
 		panic("nested consensus engine")
 	}
-	return &Beacon{ethone: ethone}
+	return &Beacon{
+		ethone:                 ethone,
+		headerValidatorWorkers: workers,
+	}
 }
 
 // isPostMerge reports whether the given block number is assumed to be post-merge.
@@ -291,10 +294,16 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 // a results channel to retrieve the async verifications. An additional parent
 // header will be passed if the relevant header is not in the database yet.
 func (beacon *Beacon) verifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, ancestor *types.Header) (chan<- struct{}, <-chan error) {
-	var (
-		abort   = make(chan struct{})
-		results = make(chan error, len(headers))
-	)
+	abort := make(chan struct{})
+	results := make(chan error, len(headers))
+	type job struct {
+		i      int
+		header *types.Header
+		parent *types.Header
+	}
+	jobs := make(chan job, len(headers))
+
+	// Prepare jobs
 	go func() {
 		for i, header := range headers {
 			var parent *types.Header
@@ -307,22 +316,28 @@ func (beacon *Beacon) verifyHeaders(chain consensus.ChainHeaderReader, headers [
 			} else if headers[i-1].Hash() == headers[i].ParentHash {
 				parent = headers[i-1]
 			}
-			if parent == nil {
+			jobs <- job{i, header, parent}
+		}
+		close(jobs)
+	}()
+
+	for w := 0; w < beacon.headerValidatorWorkers; w++ {
+		go func() {
+			for j := range jobs {
+				var err error
+				if j.parent == nil {
+					err = consensus.ErrUnknownAncestor
+				} else {
+					err = beacon.verifyHeader(chain, j.header, j.parent)
+				}
 				select {
 				case <-abort:
 					return
-				case results <- consensus.ErrUnknownAncestor:
+				case results <- err:
 				}
-				continue
 			}
-			err := beacon.verifyHeader(chain, header, parent)
-			select {
-			case <-abort:
-				return
-			case results <- err:
-			}
-		}
-	}()
+		}()
+	}
 	return abort, results
 }
 

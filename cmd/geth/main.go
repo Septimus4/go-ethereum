@@ -106,6 +106,8 @@ var (
 		utils.CacheLogSizeFlag,
 		utils.FDLimitFlag,
 		utils.CryptoKZGFlag,
+		utils.HeaderValidatorWorkerCountFlag,
+		utils.BlockValidatorWorkerCountFlag,
 		utils.ListenPortFlag,
 		utils.DiscoveryPortFlag,
 		utils.MaxPeersFlag,
